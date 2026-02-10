@@ -20,16 +20,10 @@ AnFact intercepts that moment of curiosity. Ask a question, get an AI-generated 
 
 You search once. You remember forever.
 
-## Screenshots
+## Demo
 
 <p align="center">
-  <img src="screenshots/home.png" width="200" alt="Home Screen" />
-  &nbsp;&nbsp;
-  <img src="screenshots/search.png" width="200" alt="Search & Answer" />
-  &nbsp;&nbsp;
-  <img src="screenshots/review.png" width="200" alt="Spaced Repetition Review" />
-  &nbsp;&nbsp;
-  <img src="screenshots/library.png" width="200" alt="Fact Library" />
+  <video src="https://github.com/user-attachments/assets/fbe3e3af-7b5f-4ca9-abd5-8593284ea086" width="300" autoplay loop muted />
 </p>
 
 ## Key Features
