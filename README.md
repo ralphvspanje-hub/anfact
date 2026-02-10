@@ -92,6 +92,8 @@ User Question
 
 **3. Retain** — Come back daily. FSRS schedules reviews at optimal intervals, adapting to your performance on each card.
 
+---
+
 This is a portfolio showcase. The codebase is private while in active development — happy to walk through the architecture and code in person.
 
 ---
