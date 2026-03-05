@@ -139,7 +139,7 @@ export default function EmailAuthModal({
                 {mode === 'pending_confirmation' && (
                   <Pressable
                     onPress={() => { setMode('login'); setError(''); }}
-                    style={styles.toggleLink}
+                    style={[styles.toggleLink, { alignItems: 'center' }]}
                   >
                     <Text style={[styles.toggleText, { color: theme.colors.primary }]}>
                       Already have an account? Try logging in instead, nerd
