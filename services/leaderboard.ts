@@ -40,6 +40,12 @@ export async function submitScore(
   );
 
   if (error) {
+    // UNIQUE constraint on user_name — another user already has this name.
+    // The score row still upserts fine on user_id, so this is non-fatal.
+    if (error.code === '23505') {
+      console.warn('Duplicate user_name on leaderboard (UNIQUE violation) — ignored:', error.message);
+      return;
+    }
     console.error('Failed to submit leaderboard score:', error.message);
   }
 }

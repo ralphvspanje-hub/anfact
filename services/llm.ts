@@ -46,17 +46,39 @@ async function chatCompletion(
 
 /**
  * Ask the LLM a question and get a concise answer.
+ *
+ * Internally requests structured JSON so the model reasons (context)
+ * before committing to an answer, but returns answer-first text so
+ * the user sees the direct answer at the top.
  */
 export async function askLLM(question: string): Promise<string> {
   try {
-    const prompt = `Answer this question. Start with the direct answer in the first sentence, then provide brief context. Use **bold** for important terms and names. Keep it concise (under 100 words). Question: ${question}`;
+    const prompt = `Answer this question as JSON with exactly two fields.
+Fill "context" FIRST (brief reasoning / background, 1-3 sentences), then "answer" (the direct answer, concise, under 80 words). Use **bold** for important terms and names in both fields.
+
+Respond with ONLY valid JSON, no other text:
+{"context": "...", "answer": "..."}
+
+Question: ${question}`;
 
     const content = await chatCompletion(
       [{ role: 'user', content: prompt }],
       500,
+      0.3,
     );
 
-    return content || 'Sorry, something went wrong.';
+    if (!content) return 'Sorry, something went wrong.';
+
+    try {
+      const json = JSON.parse(content.trim());
+      if (typeof json.answer === 'string' && typeof json.context === 'string') {
+        return `${json.answer.trim()}\n\n${json.context.trim()}`;
+      }
+    } catch {
+      // JSON parse failed — fall through and return raw content
+    }
+
+    return content;
   } catch (error) {
     console.error('LLM error:', error);
     return 'Sorry, something went wrong.';
@@ -141,6 +163,7 @@ export async function generateMnemonic(
     const content = await chatCompletion(
       [{ role: 'user', content: prompt }],
       100,
+      0.5,
     );
 
     return content?.trim() || '';

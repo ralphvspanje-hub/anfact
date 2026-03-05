@@ -6,6 +6,8 @@ import {
   StyleSheet,
   Platform,
   Modal,
+  Alert,
+  Linking,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -16,13 +18,36 @@ import Animated, {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
 import { ThemeToggle } from './ThemeToggle';
+import { useAuth } from '../contexts/AuthContext';
+import { authService } from '../services/auth';
+import EmailAuthModal from './EmailAuthModal';
+import NameEntryModal from './NameEntryModal';
+import JokeModal from './JokeModal';
 
 const isWeb = Platform.OS === 'web';
 
 /* ── Shared menu content ─────────────────────────────── */
 
-const MenuContent = () => {
+const PRIVACY_URL = 'https://anfact.app/privacy';
+const TERMS_URL = 'https://anfact.app/terms';
+
+const MenuContent = ({
+  onLoginPress,
+  onDeleteAccount,
+}: {
+  onLoginPress: () => void;
+  onDeleteAccount: () => void;
+}) => {
   const { theme } = useTheme();
+  const { isLoggedIn, userName, logout } = useAuth();
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (err) {
+      console.error('Logout failed', err);
+    }
+  };
 
   return (
     <>
@@ -34,6 +59,69 @@ const MenuContent = () => {
       >
         Settings
       </Text>
+
+      <View
+        style={[styles.menuDivider, { backgroundColor: theme.colors.border }]}
+      />
+
+      {/* Auth row */}
+      {isLoggedIn ? (
+        <>
+          <View style={styles.menuRow}>
+            <View style={styles.menuRowLeft}>
+              <Ionicons
+                name="person-outline"
+                size={18}
+                color={theme.colors.textSecondary}
+              />
+              <Text
+                style={[
+                  styles.menuRowLabel,
+                  { color: theme.colors.text, fontFamily: 'Nunito-Regular' },
+                ]}
+                numberOfLines={1}
+              >
+                {userName}
+              </Text>
+            </View>
+          </View>
+          <Pressable style={styles.menuRow} onPress={handleLogout}>
+            <View style={styles.menuRowLeft}>
+              <Ionicons
+                name="log-out-outline"
+                size={18}
+                color={theme.colors.error}
+              />
+              <Text
+                style={[
+                  styles.menuRowLabel,
+                  { color: theme.colors.error, fontFamily: 'Nunito-Regular' },
+                ]}
+              >
+                Log out
+              </Text>
+            </View>
+          </Pressable>
+        </>
+      ) : (
+        <Pressable style={styles.menuRow} onPress={onLoginPress}>
+          <View style={styles.menuRowLeft}>
+            <Ionicons
+              name="log-in-outline"
+              size={18}
+              color={theme.colors.primary}
+            />
+            <Text
+              style={[
+                styles.menuRowLabel,
+                { color: theme.colors.primary, fontFamily: 'Nunito-Regular' },
+              ]}
+            >
+              Log in / Register
+            </Text>
+          </View>
+        </Pressable>
+      )}
 
       <View
         style={[styles.menuDivider, { backgroundColor: theme.colors.border }]}
@@ -57,6 +145,44 @@ const MenuContent = () => {
         </View>
         <ThemeToggle />
       </View>
+
+      <View
+        style={[styles.menuDivider, { backgroundColor: theme.colors.border }]}
+      />
+
+      <Pressable style={styles.menuRow} onPress={() => Linking.openURL(PRIVACY_URL)}>
+        <View style={styles.menuRowLeft}>
+          <Ionicons name="shield-outline" size={18} color={theme.colors.textSecondary} />
+          <Text style={[styles.menuRowLabel, { color: theme.colors.text, fontFamily: 'Nunito-Regular' }]}>
+            Privacy Policy
+          </Text>
+        </View>
+      </Pressable>
+
+      <Pressable style={styles.menuRow} onPress={() => Linking.openURL(TERMS_URL)}>
+        <View style={styles.menuRowLeft}>
+          <Ionicons name="document-text-outline" size={18} color={theme.colors.textSecondary} />
+          <Text style={[styles.menuRowLabel, { color: theme.colors.text, fontFamily: 'Nunito-Regular' }]}>
+            Terms of Service
+          </Text>
+        </View>
+      </Pressable>
+
+      {isLoggedIn && (
+        <>
+          <View
+            style={[styles.menuDivider, { backgroundColor: theme.colors.border }]}
+          />
+          <Pressable style={styles.menuRow} onPress={onDeleteAccount}>
+            <View style={styles.menuRowLeft}>
+              <Ionicons name="trash-outline" size={18} color={theme.colors.error} />
+              <Text style={[styles.menuRowLabel, { color: theme.colors.error, fontFamily: 'Nunito-Regular' }]}>
+                Delete account
+              </Text>
+            </View>
+          </Pressable>
+        </>
+      )}
     </>
   );
 };
@@ -65,7 +191,11 @@ const MenuContent = () => {
 
 export const SettingsMenu = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [emailAuthModalVisible, setEmailAuthModalVisible] = useState(false);
+  const [nameModalVisible, setNameModalVisible] = useState(false);
+  const [jokeModalVisible, setJokeModalVisible] = useState(false);
   const { theme } = useTheme();
+  const { loginWithEmail, register, login, markOnboardingComplete, deleteAccount } = useAuth();
   const containerRef = useRef<View>(null);
   const progress = useSharedValue(0);
 
@@ -74,10 +204,14 @@ export const SettingsMenu = () => {
     progress.value = withTiming(1, { duration: 200 });
   }, []);
 
-  const close = useCallback(() => {
+  const close = useCallback((onClosed?: () => void) => {
+    const afterClose = () => {
+      setIsOpen(false);
+      onClosed?.();
+    };
     progress.value = withTiming(0, { duration: 150 }, (finished) => {
       if (finished) {
-        runOnJS(setIsOpen)(false);
+        runOnJS(afterClose)();
       }
     });
   }, []);
@@ -89,6 +223,70 @@ export const SettingsMenu = () => {
       open();
     }
   }, [isOpen, close, open]);
+
+  const handleLoginPress = useCallback(() => {
+    close(() => setEmailAuthModalVisible(true));
+  }, [close]);
+
+  const handleSettingsRegister = useCallback(async (email: string, password: string): Promise<'success' | 'pending_confirmation'> => {
+    const result = await register(email, password);
+    if (result.status === 'success') {
+      setEmailAuthModalVisible(false);
+      setNameModalVisible(true);
+    }
+    return result.status;
+  }, [register]);
+
+  const handleSettingsLogin = useCallback(async (email: string, password: string) => {
+    const user = await loginWithEmail(email, password);
+    setEmailAuthModalVisible(false);
+    if (!user.name) {
+      setNameModalVisible(true);
+    }
+  }, [loginWithEmail]);
+
+  const handleSettingsEmailDismiss = useCallback(() => {
+    setEmailAuthModalVisible(false);
+  }, []);
+
+  const handleSettingsNameSubmit = useCallback(async (name: string) => {
+    await login(name);
+    setNameModalVisible(false);
+    setJokeModalVisible(true);
+  }, [login]);
+
+  const handleSettingsNameDismiss = useCallback(() => {
+    setNameModalVisible(false);
+  }, []);
+
+  const handleSettingsJokeConfirm = useCallback(async () => {
+    await markOnboardingComplete();
+    setJokeModalVisible(false);
+  }, [markOnboardingComplete]);
+
+  const handleDeleteAccount = useCallback(() => {
+    close(() => {
+      Alert.alert(
+        'Delete account',
+        'Are you sure? This will permanently delete your account. Your leaderboard entry will be kept.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await deleteAccount();
+              } catch (err) {
+                console.error('Delete account failed', err);
+                Alert.alert('Error', 'Failed to delete account. Please try again.');
+              }
+            },
+          },
+        ],
+      );
+    });
+  }, [close, deleteAccount]);
 
   /* ── Web: click-outside detection ── */
   useEffect(() => {
@@ -151,9 +349,26 @@ export const SettingsMenu = () => {
               },
             ]}
           >
-            <MenuContent />
+            <MenuContent onLoginPress={handleLoginPress} onDeleteAccount={handleDeleteAccount} />
           </Animated.View>
         )}
+
+        <EmailAuthModal
+          visible={emailAuthModalVisible}
+          onRegister={handleSettingsRegister}
+          onLogin={handleSettingsLogin}
+          onForgotPassword={(email) => authService.resetPassword(email)}
+          onDismiss={handleSettingsEmailDismiss}
+        />
+        <NameEntryModal
+          visible={nameModalVisible}
+          onSubmit={handleSettingsNameSubmit}
+          onDismiss={handleSettingsNameDismiss}
+        />
+        <JokeModal
+          visible={jokeModalVisible}
+          onConfirm={handleSettingsJokeConfirm}
+        />
       </View>
     );
   }
@@ -182,7 +397,7 @@ export const SettingsMenu = () => {
         visible={isOpen}
         transparent
         animationType="none"
-        onRequestClose={close}
+        onRequestClose={() => close()}
         statusBarTranslucent
       >
         <View style={styles.nativeContainer}>
@@ -194,7 +409,7 @@ export const SettingsMenu = () => {
               backdropAnimStyle,
             ]}
           >
-            <Pressable style={StyleSheet.absoluteFill} onPress={close} />
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => close()} />
           </Animated.View>
 
           {/* Bottom sheet */}
@@ -214,10 +429,27 @@ export const SettingsMenu = () => {
                 { backgroundColor: theme.colors.border },
               ]}
             />
-            <MenuContent />
+            <MenuContent onLoginPress={handleLoginPress} onDeleteAccount={handleDeleteAccount} />
           </Animated.View>
         </View>
       </Modal>
+
+      <EmailAuthModal
+        visible={emailAuthModalVisible}
+        onRegister={handleSettingsRegister}
+        onLogin={handleSettingsLogin}
+        onForgotPassword={(email) => authService.resetPassword(email)}
+        onDismiss={handleSettingsEmailDismiss}
+      />
+      <NameEntryModal
+        visible={nameModalVisible}
+        onSubmit={handleSettingsNameSubmit}
+        onDismiss={handleSettingsNameDismiss}
+      />
+      <JokeModal
+        visible={jokeModalVisible}
+        onConfirm={handleSettingsJokeConfirm}
+      />
     </View>
   );
 };

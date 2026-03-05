@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createEmptyCard } from 'ts-fsrs';
 import { Fact, AtomicCard, ReviewLog } from '../types/fact';
+import { getSupabase } from './supabase';
 
 const FACTS_STORAGE_KEY = 'facts';
 const REVIEW_LOGS_KEY = 'review_logs';
@@ -11,6 +12,66 @@ const DAILY_SEARCHES_KEY = 'daily_searches';
 // ──────────────────────────────────────────────
 export const MAX_SEARCHES_PER_DAY = 30;
 export const MAX_FACTS_STORED = 100;
+
+// ──────────────────────────────────────────────
+// Cloud sync helpers
+// ──────────────────────────────────────────────
+
+async function getLoggedInUserId(): Promise<string | null> {
+  try {
+    const sb = getSupabase();
+    if (!sb) return null;
+    const { data } = await sb.auth.getSession();
+    return data.session?.user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function factToRow(fact: Fact, userId: string) {
+  return {
+    id: fact.id,
+    user_id: userId,
+    question: fact.question,
+    answer: fact.answer,
+    mnemonic: fact.mnemonic ?? null,
+    created_at: fact.createdAt instanceof Date ? fact.createdAt.toISOString() : fact.createdAt,
+    card: fact.card,
+    atomic_cards: fact.atomicCards ?? null,
+  };
+}
+
+function rowToFact(row: any): Fact {
+  return hydrateFact({
+    id: row.id,
+    question: row.question,
+    answer: row.answer,
+    mnemonic: row.mnemonic,
+    createdAt: row.created_at,
+    card: row.card,
+    atomicCards: row.atomic_cards,
+  });
+}
+
+async function upsertFactToCloud(fact: Fact, userId: string): Promise<void> {
+  try {
+    const sb = getSupabase();
+    if (!sb) return;
+    await sb.from('facts').upsert(factToRow(fact, userId), { onConflict: 'id' });
+  } catch (err) {
+    console.warn('Cloud upsert failed (best-effort):', err);
+  }
+}
+
+async function deleteFactFromCloud(factId: string): Promise<void> {
+  try {
+    const sb = getSupabase();
+    if (!sb) return;
+    await sb.from('facts').delete().eq('id', factId);
+  } catch (err) {
+    console.warn('Cloud delete failed (best-effort):', err);
+  }
+}
 
 /**
  * Hydrate a single FSRS Card object from JSON (dates as Date objects)
@@ -45,7 +106,7 @@ function hydrateFact(f: any): Fact {
 }
 
 /**
- * Save a fact to local storage
+ * Save a fact to local storage (and cloud for logged-in users)
  */
 export async function saveFact(fact: Fact): Promise<void> {
   try {
@@ -57,6 +118,9 @@ export async function saveFact(fact: Fact): Promise<void> {
     existingFacts.push(fact);
 
     await AsyncStorage.setItem(FACTS_STORAGE_KEY, JSON.stringify(existingFacts));
+
+    const userId = await getLoggedInUserId();
+    if (userId) upsertFactToCloud(fact, userId);
   } catch (error) {
     console.error('Error saving fact:', error);
     throw error;
@@ -95,6 +159,9 @@ export async function updateFact(updatedFact: Fact): Promise<void> {
     if (index !== -1) {
       existingFacts[index] = updatedFact;
       await AsyncStorage.setItem(FACTS_STORAGE_KEY, JSON.stringify(existingFacts));
+
+      const userId = await getLoggedInUserId();
+      if (userId) upsertFactToCloud(updatedFact, userId);
     }
   } catch (error) {
     console.error('Error updating fact:', error);
@@ -116,7 +183,7 @@ export async function getFactCount(): Promise<number> {
 }
 
 /**
- * Delete a fact from local storage
+ * Delete a fact from local storage (and cloud for logged-in users)
  */
 export async function deleteFact(factId: string): Promise<void> {
   try {
@@ -127,6 +194,9 @@ export async function deleteFact(factId: string): Promise<void> {
     const filteredFacts = existingFacts.filter(f => f.id !== factId);
 
     await AsyncStorage.setItem(FACTS_STORAGE_KEY, JSON.stringify(filteredFacts));
+
+    const userId = await getLoggedInUserId();
+    if (userId) deleteFactFromCloud(factId);
   } catch (error) {
     console.error('Error deleting fact:', error);
     throw error;
@@ -178,17 +248,27 @@ export async function deleteAtomicCard(factId: string, atomicCardId: string): Pr
     if (factIndex === -1) return;
 
     const fact = existingFacts[factIndex];
+    let removedEntireFact = false;
     if (fact.atomicCards) {
       fact.atomicCards = fact.atomicCards.filter(ac => ac.id !== atomicCardId);
       if (fact.atomicCards.length === 0) {
-        // No atomic cards left — remove entire fact
         existingFacts = existingFacts.filter(f => f.id !== factId);
+        removedEntireFact = true;
       } else {
         existingFacts[factIndex] = fact;
       }
     }
 
     await AsyncStorage.setItem(FACTS_STORAGE_KEY, JSON.stringify(existingFacts));
+
+    const userId = await getLoggedInUserId();
+    if (userId) {
+      if (removedEntireFact) {
+        deleteFactFromCloud(factId);
+      } else {
+        upsertFactToCloud(fact, userId);
+      }
+    }
   } catch (error) {
     console.error('Error deleting atomic card:', error);
     throw error;
@@ -244,6 +324,50 @@ export async function getStreak(): Promise<number> {
   } catch (error) {
     console.error('Error calculating streak:', error);
     return 0;
+  }
+}
+
+// ──────────────────────────────────────────────
+// Cloud sync on login
+// ──────────────────────────────────────────────
+
+/**
+ * Merge local and remote facts on login.
+ * Cloud-wins for conflicts (matching id). Local-only facts are uploaded.
+ */
+export async function syncFactsOnLogin(userId: string): Promise<void> {
+  try {
+    const sb = getSupabase();
+    if (!sb) return;
+
+    const { data: remoteRows, error } = await sb
+      .from('facts')
+      .select('*')
+      .eq('user_id', userId);
+
+    if (error) {
+      console.warn('syncFactsOnLogin: failed to fetch remote facts', error);
+      return;
+    }
+
+    const remoteFacts: Fact[] = (remoteRows ?? []).map(rowToFact);
+    const remoteIds = new Set(remoteFacts.map(f => f.id));
+
+    const localFacts = await getFacts();
+    const localOnly = localFacts.filter(f => !remoteIds.has(f.id));
+
+    // Cloud-wins merge: remote facts take priority, append local-only facts
+    const merged = [...remoteFacts, ...localOnly];
+    await AsyncStorage.setItem(FACTS_STORAGE_KEY, JSON.stringify(merged));
+
+    // Upload local-only facts to cloud (first-login migration)
+    if (localOnly.length > 0) {
+      const rows = localOnly.map(f => factToRow(f, userId));
+      const { error: uploadErr } = await sb.from('facts').upsert(rows, { onConflict: 'id' });
+      if (uploadErr) console.warn('syncFactsOnLogin: upload local-only failed', uploadErr);
+    }
+  } catch (err) {
+    console.warn('syncFactsOnLogin: unexpected error', err);
   }
 }
 

@@ -11,16 +11,36 @@ export interface AuthUser {
   name: string;    // display name
 }
 
+export type RegisterResult =
+  | { status: 'success'; userId: string }
+  | { status: 'pending_confirmation' };
+
 export interface AuthService {
-  /** Ensure an anonymous Supabase session exists (call once on launch) */
-  ensureSession(): Promise<string | null>;
-  /** Set / update display name and return the AuthUser */
+  /** Passive session check — returns userId if a real session exists, null otherwise */
+  getSession(): Promise<string | null>;
+  /** Register a new account with email + password */
+  register(email: string, password: string): Promise<RegisterResult>;
+  /** Log in with email + password, fetch username from leaderboard, cache locally */
+  loginWithEmail(email: string, password: string): Promise<AuthUser>;
+  /** Set display name for the current user (used during onboarding after register) */
   login(name: string): Promise<AuthUser>;
+  /** Sign out and clear local caches */
+  logout(): Promise<void>;
   getUserId(): Promise<string | null>;
   getUserName(): Promise<string | null>;
   isLoggedIn(): Promise<boolean>;
   hasCompletedOnboarding(): Promise<boolean>;
   markOnboardingComplete(): Promise<void>;
+  isPendingEmailConfirmation(): Promise<boolean>;
+  /** Delete the current user's account via Postgres RPC and clear local data */
+  deleteAccount(): Promise<void>;
+  /** Send a password-reset email */
+  resetPassword(email: string): Promise<void>;
+  subscribeToAuthChanges(callback: (event: string) => void): () => void;
+  /** Exchange a deep-link auth code for a session (PKCE flow) */
+  handleDeepLink(url: string): Promise<void>;
+  /** Remove the pending-confirmation flag so the user can retry registration */
+  clearPendingConfirmation(): Promise<void>;
 }
 
 // ──────────────────────────────────────────────
@@ -29,12 +49,12 @@ export interface AuthService {
 
 const USER_NAME_KEY = 'user_display_name';
 const ONBOARDING_COMPLETE_KEY = 'onboarding_complete';
+const PENDING_CONFIRMATION_KEY = 'pending_email_confirmation';
 
 // ──────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────
 
-/** Get the currently authenticated Supabase user id, or null */
 async function getSupabaseUserId(): Promise<string | null> {
   const supabase = getSupabase();
   if (!supabase) return null;
@@ -48,49 +68,78 @@ async function getSupabaseUserId(): Promise<string | null> {
 // ──────────────────────────────────────────────
 
 export const authService: AuthService = {
-  /**
-   * Ensure an anonymous Supabase session exists.
-   * If the user already has a persisted session (from a previous launch),
-   * this is a no-op.  Otherwise it calls signInAnonymously().
-   * Returns the Supabase user id on success, or null.
-   */
-  async ensureSession(): Promise<string | null> {
+  async getSession(): Promise<string | null> {
     const supabase = getSupabase();
-    if (!supabase) {
-      console.warn('Supabase not configured — anonymous auth skipped.');
-      return null;
-    }
+    if (!supabase) return null;
 
-    // Check for an existing persisted session first
     const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user?.id) {
-      return session.user.id;
+    if (!session?.user) return null;
+
+    // Only count real (non-anonymous) sessions
+    if (session.user.is_anonymous) return null;
+
+    return session.user.id;
+  },
+
+  async register(email: string, password: string): Promise<RegisterResult> {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error('Supabase not configured');
+
+    const { data, error } = await supabase.auth.signUp({ email, password });
+
+    if (error) throw error;
+
+    if (!data.session?.user?.id) {
+      await AsyncStorage.setItem(PENDING_CONFIRMATION_KEY, 'true');
+      return { status: 'pending_confirmation' };
     }
 
-    // No session — create an anonymous one
-    const { data, error } = await supabase.auth.signInAnonymously();
-    if (error) {
-      console.error('Anonymous sign-in failed:', error.message);
-      return null;
+    return { status: 'success', userId: data.session.user.id };
+  },
+
+  async loginWithEmail(email: string, password: string): Promise<AuthUser> {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error('Supabase not configured');
+
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (error) throw error;
+
+    const userId = data.session?.user?.id;
+    if (!userId) throw new Error('Login failed — no session returned.');
+
+    // Fetch username from leaderboard table
+    const { data: row } = await supabase
+      .from('leaderboard')
+      .select('user_name')
+      .eq('user_id', userId)
+      .single();
+
+    const userName = row?.user_name ?? null;
+
+    if (userName) {
+      await AsyncStorage.setItem(USER_NAME_KEY, userName);
+      await AsyncStorage.setItem(ONBOARDING_COMPLETE_KEY, 'true');
     }
 
-    return data.session?.user?.id ?? null;
+    return { id: userId, name: userName ?? '' };
   },
 
   async login(name: string): Promise<AuthUser> {
-    // Ensure we have a Supabase session
-    let id = await getSupabaseUserId();
-    if (!id) {
-      id = await this.ensureSession();
-    }
-    if (!id) {
-      throw new Error('Could not establish a Supabase session for login.');
-    }
+    const id = await getSupabaseUserId();
+    if (!id) throw new Error('Could not establish a Supabase session for login.');
 
-    // Persist display name locally
     await AsyncStorage.setItem(USER_NAME_KEY, name);
 
     return { id, name };
+  },
+
+  async logout(): Promise<void> {
+    const supabase = getSupabase();
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
+    await AsyncStorage.multiRemove([USER_NAME_KEY, ONBOARDING_COMPLETE_KEY, PENDING_CONFIRMATION_KEY]);
   },
 
   async getUserId(): Promise<string | null> {
@@ -106,11 +155,14 @@ export const authService: AuthService = {
   },
 
   async isLoggedIn(): Promise<boolean> {
-    const [id, name] = await Promise.all([
-      getSupabaseUserId(),
-      AsyncStorage.getItem(USER_NAME_KEY),
-    ]);
-    return id !== null && name !== null;
+    const supabase = getSupabase();
+    if (!supabase) return false;
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user || session.user.is_anonymous) return false;
+
+    const name = await AsyncStorage.getItem(USER_NAME_KEY);
+    return name !== null;
   },
 
   async hasCompletedOnboarding(): Promise<boolean> {
@@ -124,5 +176,59 @@ export const authService: AuthService = {
 
   async markOnboardingComplete(): Promise<void> {
     await AsyncStorage.setItem(ONBOARDING_COMPLETE_KEY, 'true');
+    await AsyncStorage.removeItem(PENDING_CONFIRMATION_KEY);
+  },
+
+  async isPendingEmailConfirmation(): Promise<boolean> {
+    try {
+      const val = await AsyncStorage.getItem(PENDING_CONFIRMATION_KEY);
+      return val === 'true';
+    } catch {
+      return false;
+    }
+  },
+
+  async deleteAccount(): Promise<void> {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error('Supabase not configured');
+
+    const { error } = await supabase.rpc('delete_user');
+    if (error) throw error;
+
+    await AsyncStorage.multiRemove([USER_NAME_KEY, ONBOARDING_COMPLETE_KEY, PENDING_CONFIRMATION_KEY]);
+  },
+
+  async resetPassword(email: string): Promise<void> {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error('Supabase not configured');
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    if (error) throw error;
+  },
+
+  subscribeToAuthChanges(callback: (event: string) => void): () => void {
+    const supabase = getSupabase();
+    if (!supabase) return () => {};
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event: string) => callback(event),
+    );
+    return () => subscription.unsubscribe();
+  },
+
+  async handleDeepLink(url: string): Promise<void> {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error('Supabase not configured');
+
+    const parsedUrl = new URL(url);
+    const code = parsedUrl.searchParams.get('code');
+    if (!code) throw new Error('No auth code found in deep link URL');
+
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) throw error;
+  },
+
+  async clearPendingConfirmation(): Promise<void> {
+    await AsyncStorage.removeItem(PENDING_CONFIRMATION_KEY);
   },
 };

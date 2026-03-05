@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, ScrollView, Pressable, Platform, KeyboardAvoidingView, Alert } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { StatusBar } from 'expo-status-bar';
@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import SearchInput from '../../components/SearchInput';
 import AnswerCard from '../../components/AnswerCard';
 import AtomicCardsSheet from '../../components/AtomicCardsSheet';
+import EmailAuthModal from '../../components/EmailAuthModal';
 import NameEntryModal from '../../components/NameEntryModal';
 import JokeModal from '../../components/JokeModal';
 import { askLLM, generateAtomicCards } from '../../services/llm';
@@ -18,6 +19,7 @@ import { Fact, AtomicCard } from '../../types/fact';
 import { Container } from '../../components/Container';
 import { useTheme, typography, spacing, layout } from '../../theme';
 import { useAuth } from '../../contexts/AuthContext';
+import { authService } from '../../services/auth';
 import { useActionKey } from '../../hooks/useActionKey';
 
 import {
@@ -32,7 +34,7 @@ const CHIP_COUNT = 3;
 export default function SearchScreen() {
   const { theme, isDark } = useTheme();
   const router = useRouter();
-  const { isLoggedIn, hasCompletedOnboarding, login, markOnboardingComplete, userId } = useAuth();
+  const { isLoggedIn, hasCompletedOnboarding, login, register, loginWithEmail, markOnboardingComplete, userId } = useAuth();
   const [loading, setLoading] = useState(false);
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
@@ -40,9 +42,10 @@ export default function SearchScreen() {
   const [isSaved, setIsSaved] = useState(false);
 
   // Auth popup state
+  const [emailAuthModalVisible, setEmailAuthModalVisible] = useState(false);
   const [nameModalVisible, setNameModalVisible] = useState(false);
   const [jokeModalVisible, setJokeModalVisible] = useState(false);
-  // True once the name popup was shown but dismissed — blocks searching
+  // True once the auth popup was shown but dismissed — blocks searching
   const [authPending, setAuthPending] = useState(false);
 
   // Controlled value for SearchInput (set when a chip is tapped)
@@ -81,6 +84,20 @@ export default function SearchScreen() {
     }, []),
   );
 
+  // Listen for auth state changes (e.g. user confirms email in browser, then returns)
+  useEffect(() => {
+    const unsubscribe = authService.subscribeToAuthChanges(async (event) => {
+      if (event === 'SIGNED_IN') {
+        const pending = await authService.isPendingEmailConfirmation();
+        if (pending) {
+          setEmailAuthModalVisible(false);
+          setNameModalVisible(true);
+        }
+      }
+    });
+    return unsubscribe;
+  }, []);
+
   // Atomic cards draft state
   const [draftCards, setDraftCards] = useState<{ front: string; back: string }[]>([]);
   const [sheetVisible, setSheetVisible] = useState(false);
@@ -106,9 +123,9 @@ export default function SearchScreen() {
   }, [inputSlide]);
 
   const handleSearch = async (query: string) => {
-    // Block searching until the user fills in their name
+    // Block searching until the user completes auth
     if (authPending) {
-      setNameModalVisible(true);
+      setEmailAuthModalVisible(true);
       return;
     }
 
@@ -146,9 +163,8 @@ export default function SearchScreen() {
   };
 
   const handleChipPress = (prompt: string) => {
-    // Block chip search too when auth is pending
     if (authPending) {
-      setNameModalVisible(true);
+      setEmailAuthModalVisible(true);
       return;
     }
     setInputValue(prompt);
@@ -219,10 +235,8 @@ export default function SearchScreen() {
       setSheetVisible(false);
       setDraftCards([]);
 
-      // Trigger auth popup sequence right after card save,
-      // BEFORE resetting the view — feels more natural
       if (!isLoggedIn && !hasCompletedOnboarding) {
-        setNameModalVisible(true);
+        setEmailAuthModalVisible(true);
       } else {
         handleReset();
       }
@@ -233,6 +247,32 @@ export default function SearchScreen() {
 
   // ── Auth popup handlers ──
 
+  const handleEmailRegister = async (email: string, password: string): Promise<'success' | 'pending_confirmation'> => {
+    const result = await register(email, password);
+    if (result.status === 'success') {
+      setEmailAuthModalVisible(false);
+      setNameModalVisible(true);
+    }
+    return result.status;
+  };
+
+  const handleEmailLogin = async (email: string, password: string) => {
+    const user = await loginWithEmail(email, password);
+    setEmailAuthModalVisible(false);
+    setAuthPending(false);
+    if (!user.name) {
+      setNameModalVisible(true);
+    } else {
+      handleReset();
+    }
+  };
+
+  const handleEmailDismiss = () => {
+    setEmailAuthModalVisible(false);
+    setAuthPending(true);
+    handleReset();
+  };
+
   const handleNameSubmit = async (name: string) => {
     await login(name);
     setAuthPending(false);
@@ -241,7 +281,6 @@ export default function SearchScreen() {
   };
 
   const handleNameDismiss = () => {
-    // Dismissed without entering — block searching until they fill in their name
     setNameModalVisible(false);
     setAuthPending(true);
     handleReset();
@@ -418,6 +457,13 @@ export default function SearchScreen() {
       />
 
       {/* Auth popup sequence */}
+      <EmailAuthModal
+        visible={emailAuthModalVisible}
+        onRegister={handleEmailRegister}
+        onLogin={handleEmailLogin}
+        onForgotPassword={(email) => authService.resetPassword(email)}
+        onDismiss={handleEmailDismiss}
+      />
       <NameEntryModal
         visible={nameModalVisible}
         onSubmit={handleNameSubmit}

@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { View, Pressable, ScrollView, StyleSheet, ViewStyle } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, ScrollView, StyleSheet, ViewStyle, GestureResponderEvent, Platform } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -48,6 +48,51 @@ export const FlipCard: React.FC<FlipCardProps> = ({
 }) => {
   const rotation = useSharedValue(0);
 
+  // Tap-detection via raw touch events (Pressable would steal the responder
+  // and prevent inner ScrollViews from scrolling).
+  const touchStartYRef = useRef(0);
+  const mouseStartYRef = useRef(0);
+  const didMoveRef = useRef(false);
+
+  const handleTouchStart = (e: GestureResponderEvent) => {
+    touchStartYRef.current = e.nativeEvent.pageY;
+    didMoveRef.current = false;
+  };
+
+  const handleTouchMove = (e: GestureResponderEvent) => {
+    if (Math.abs(e.nativeEvent.pageY - touchStartYRef.current) > 8) {
+      didMoveRef.current = true;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (!didMoveRef.current) {
+      onFlip();
+    }
+  };
+
+  const handleMouseDown = (e: { clientY: number }) => {
+    mouseStartYRef.current = e.clientY;
+    didMoveRef.current = false;
+
+    const onMouseMove = (me: MouseEvent) => {
+      if (Math.abs(me.clientY - mouseStartYRef.current) > 8) {
+        didMoveRef.current = true;
+      }
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      if (!didMoveRef.current) {
+        onFlip();
+      }
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
   useEffect(() => {
     if (animateFlip) {
       rotation.value = withTiming(isFlipped ? 180 : 0, {
@@ -91,8 +136,16 @@ export const FlipCard: React.FC<FlipCardProps> = ({
     borderColor: cardBorderColor,
   };
 
+  const webMouseProps = Platform.OS === 'web' ? { onMouseDown: handleMouseDown } : {};
+
   return (
-    <Pressable onPress={onFlip} style={[styles.container, flexHeight && styles.containerFlex, style]}>
+    <View
+      style={[styles.container, flexHeight && styles.containerFlex, style]}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      {...(webMouseProps as any)}
+    >
       {/* Front face */}
       <Animated.View style={[styles.face, cardBase, frontAnimatedStyle]}>
         <ScrollView
@@ -126,7 +179,7 @@ export const FlipCard: React.FC<FlipCardProps> = ({
           </View>
         )}
       </Animated.View>
-    </Pressable>
+    </View>
   );
 };
 

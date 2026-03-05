@@ -756,15 +756,16 @@ export default function RecallScreen() {
             💡 {currentMnemonic}
           </Text>
         ) : (
+          <View
+            onTouchEnd={(e) => e.stopPropagation()}
+            {...(Platform.OS === 'web' ? { onMouseDown: (e: any) => e.stopPropagation() } : {})}
+          >
           <TouchableOpacity
             style={[
               styles.mnemonicButton,
               { borderColor: theme.colors.border },
             ]}
-            onPress={(e) => {
-              e.stopPropagation();
-              handleGenerateMnemonic();
-            }}
+            onPress={handleGenerateMnemonic}
             disabled={isGeneratingMnemonic}
           >
             {isGeneratingMnemonic ? (
@@ -787,15 +788,19 @@ export default function RecallScreen() {
               </>
             )}
           </TouchableOpacity>
+          </View>
         )}
 
         {/* Source context collapsible for atomic cards */}
         {!currentItem?.isLegacy && currentItem?.atomicCard && (
           <View style={styles.sourceContextContainer}>
+            <View
+              onTouchEnd={(e) => e.stopPropagation()}
+              {...(Platform.OS === 'web' ? { onMouseDown: (e: any) => e.stopPropagation() } : {})}
+            >
             <TouchableOpacity
               style={styles.sourceContextToggle}
-              onPress={(e) => {
-                e.stopPropagation();
+              onPress={() => {
                 LayoutAnimation.configureNext(
                   LayoutAnimation.Presets.easeInEaseOut,
                 );
@@ -816,12 +821,15 @@ export default function RecallScreen() {
                 color={theme.colors.textSecondary}
               />
             </TouchableOpacity>
+            </View>
             {sourceExpanded && (
-              <View
+              <ScrollView
                 style={[
                   styles.sourceContextContent,
                   { borderTopColor: theme.colors.border },
                 ]}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={false}
               >
                 <MarkdownText
                   text={currentItem.fact.answer}
@@ -830,13 +838,17 @@ export default function RecallScreen() {
                     color: theme.colors.textSecondary,
                   }}
                 />
-              </View>
+              </ScrollView>
             )}
           </View>
         )}
 
         {/* Split-this-card for legacy facts */}
         {currentItem?.isLegacy && (
+          <View
+            onTouchEnd={(e) => e.stopPropagation()}
+            {...(Platform.OS === 'web' ? { onMouseDown: (e: any) => e.stopPropagation() } : {})}
+          >
           <AnimatedPressable
             style={[styles.splitButton, { borderColor: theme.colors.border }]}
             onPress={handleSplitCard}
@@ -862,6 +874,7 @@ export default function RecallScreen() {
               </>
             )}
           </AnimatedPressable>
+          </View>
         )}
       </View>
     </View>
@@ -1466,6 +1479,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 2,
     paddingTop: spacing.sm,
     marginTop: spacing.xs,
+    maxHeight: 150,
   },
   // Split button (inside back face)
   splitButton: {

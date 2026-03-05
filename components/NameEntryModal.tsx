@@ -21,7 +21,7 @@ export default function NameEntryModal({ visible, onSubmit, onDismiss }: NameEnt
   const { theme } = useTheme();
   const [name, setName] = useState('');
   const trimmed = name.trim();
-  const isValid = trimmed.length >= 1 && trimmed.length <= 20;
+  const isValid = trimmed.length >= 2 && trimmed.length <= 30;
 
   const handleSubmit = () => {
     if (!isValid) return;
@@ -53,10 +53,10 @@ export default function NameEntryModal({ visible, onSubmit, onDismiss }: NameEnt
             onPress={() => {}}  // swallow press
           >
             <Text style={[styles.title, { color: theme.colors.text }]}>
-              Wat is je naam?
+              What's your name?
             </Text>
             <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-              (geen Jeffrey Epstein please)
+              Your facts are stored locally on this device.{'\n'}(no Jeffrey Epstein please)
             </Text>
 
             <TextInput
@@ -68,11 +68,11 @@ export default function NameEntryModal({ visible, onSubmit, onDismiss }: NameEnt
                   borderColor: theme.colors.border,
                 },
               ]}
-              placeholder="Jouw naam"
+              placeholder="Your name"
               placeholderTextColor={theme.colors.textSecondary}
               value={name}
               onChangeText={setName}
-              maxLength={20}
+              maxLength={30}
               autoFocus
               returnKeyType="done"
               onSubmitEditing={handleSubmit}
@@ -98,7 +98,7 @@ export default function NameEntryModal({ visible, onSubmit, onDismiss }: NameEnt
                   },
                 ]}
               >
-                Doorgaan
+                Continue
               </Text>
             </Pressable>
           </Pressable>

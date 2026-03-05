@@ -72,20 +72,20 @@ export default function JokeModal({ visible, onConfirm }: JokeModalProps) {
       <View style={styles.backdrop}>
         <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
           <Text style={[styles.text, { color: theme.colors.text }]}>
-            Druk op doorgaan als je de bestelling van 20 euro wil plaatsen.
+            Press continue to place your $20 order.
           </Text>
 
-          {/* Doorgaan — always visible */}
+          {/* Continue — always visible */}
           <Pressable
             style={[styles.confirmButton, { backgroundColor: theme.colors.primary }]}
             onPress={onConfirm}
           >
             <Text style={[styles.confirmText, { color: theme.colors.primaryForeground }]}>
-              Doorgaan
+              Continue
             </Text>
           </Pressable>
 
-          {/* Niet Doorgaan — evading button */}
+          {/* Cancel — evading button */}
           {!buttonHidden && (
             <Animated.View style={[styles.evadeWrapper, evadeStyle]}>
               <Pressable
@@ -96,7 +96,7 @@ export default function JokeModal({ visible, onConfirm }: JokeModalProps) {
                 onPress={handleEvade}
               >
                 <Text style={[styles.evadeText, { color: theme.colors.primaryForeground }]}>
-                  Niet Doorgaan
+                  Cancel
                 </Text>
               </Pressable>
             </Animated.View>
