@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, TextInput, Text, StyleSheet } from 'react-native';
-import { useTheme, typography, spacing, layout } from '../theme';
+import { useTheme, typography, rawSizes, spacing, layout } from '../theme';
 import { AnimatedPressable } from './AnimatedPressable';
 
 interface SearchInputProps {
@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderRadius: layout.borderRadius.md,
     padding: spacing.md,
-    fontSize: typography.sizes.md,
+    fontSize: rawSizes.md,
     fontFamily: typography.fontFamily.regular,
     minHeight: 48,
     maxHeight: 120,
@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
     minWidth: 80,
   },
   buttonText: {
-    fontSize: typography.sizes.md,
+    fontSize: rawSizes.md,
     fontFamily: typography.fontFamily.bold,
   },
 });

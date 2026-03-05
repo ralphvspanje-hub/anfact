@@ -1,7 +1,7 @@
 import React, { useRef, useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import MarkdownText from './MarkdownText';
-import { useTheme, typography, spacing, layout } from '../theme';
+import { useTheme, typography, spacing, layout, scaleForWeb } from '../theme';
 import { AnimatedPressable } from './AnimatedPressable';
 import { savePhrases, getRandomPhrase } from '../constants/phrases';
 
@@ -24,7 +24,7 @@ export default function AnswerCard({ answer, onSave, onSkip, isSaving, isSaved }
   return (
     <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
       <Text style={[styles.answerLabel, { color: theme.colors.textSecondary }]}>Answer:</Text>
-      <MarkdownText text={answer} style={{ fontSize: typography.sizes.md, color: theme.colors.text, lineHeight: 24, fontFamily: typography.fontFamily.regular }} />
+      <MarkdownText text={answer} style={{ fontSize: typography.sizes.md, color: theme.colors.text, lineHeight: scaleForWeb(24), fontFamily: typography.fontFamily.regular }} />
       
       <View style={styles.saveContainer}>
         {isSaved ? (

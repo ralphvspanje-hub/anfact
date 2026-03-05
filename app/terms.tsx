@@ -2,7 +2,7 @@ import React from 'react';
 import { ScrollView, Text, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Container } from '../components/Container';
-import { useTheme, typography, spacing } from '../theme';
+import { useTheme, typography, spacing, scaleForWeb } from '../theme';
 
 export default function TermsScreen() {
   const { theme, isDark } = useTheme();
@@ -82,6 +82,6 @@ const styles = StyleSheet.create({
   body: {
     fontFamily: typography.fontFamily.regular,
     fontSize: typography.sizes.sm,
-    lineHeight: 22,
+    lineHeight: scaleForWeb(22),
   },
 });

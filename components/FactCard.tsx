@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, LayoutAnimation } from 'react
 import { Ionicons } from '@expo/vector-icons';
 import { Fact } from '../types/fact';
 import MarkdownText from './MarkdownText';
-import { useTheme, typography, spacing, layout } from '../theme';
+import { useTheme, typography, spacing, layout, scaleForWeb } from '../theme';
 
 interface FactCardProps {
   fact: Fact;
@@ -42,7 +42,7 @@ export default function FactCard({ fact, onDelete, onDeleteAtomicCard }: FactCar
       {/* For legacy facts, show the answer directly */}
       {!hasAtomicCards && (
         <>
-          <MarkdownText text={fact.answer} style={{ fontSize: typography.sizes.md, color: theme.colors.textSecondary, lineHeight: 22, marginBottom: spacing.sm, fontFamily: typography.fontFamily.regular }} />
+          <MarkdownText text={fact.answer} style={{ fontSize: typography.sizes.md, color: theme.colors.textSecondary, lineHeight: scaleForWeb(22), marginBottom: spacing.sm, fontFamily: typography.fontFamily.regular }} />
           {fact.mnemonic && (
             <Text style={[styles.mnemonic, { color: theme.colors.textSecondary }]}>💡 {fact.mnemonic}</Text>
           )}
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.sm,
     fontStyle: 'italic',
     marginBottom: spacing.sm,
-    lineHeight: 20,
+    lineHeight: scaleForWeb(20),
     fontFamily: typography.fontFamily.regular,
   },
   expandToggle: {
@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
   atomicCardBack: {
     fontFamily: typography.fontFamily.regular,
     fontSize: typography.sizes.xs,
-    lineHeight: 18,
+    lineHeight: scaleForWeb(18),
   },
   atomicCardMnemonic: {
     fontFamily: typography.fontFamily.regular,

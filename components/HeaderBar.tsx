@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Image, Pressable, StyleSheet, Platform } from 'react-native';
+import { View, Text, Image, Pressable, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { usePathname, router } from 'expo-router';
 import { useTheme } from '../theme';
@@ -22,6 +22,8 @@ const NAV_ITEMS: NavItem[] = [
 export const HeaderBar = () => {
   const { theme } = useTheme();
   const pathname = usePathname();
+  const { width } = useWindowDimensions();
+  const isNarrow = width < 600;
 
   const isActive = (route: string) => {
     if (route === '/') return pathname === '/' || pathname === '/index';
@@ -31,14 +33,16 @@ export const HeaderBar = () => {
   return (
     <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
       {/* Left: Logo */}
-      <View style={styles.logoContainer}>
-        <Image
-          source={require('../assets/AnFact_Logo_Green_A_NoBg.png')}
-          style={styles.logoImage}
-          resizeMode="contain"
-        />
-        <Text style={styles.logoText}>nFact</Text>
-      </View>
+      {!isNarrow && (
+        <View style={styles.logoContainer}>
+          <Image
+            source={require('../assets/AnFact_Logo_Green_A_NoBg.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
+          <Text style={styles.logoText}>nFact</Text>
+        </View>
+      )}
 
       {/* Center: Nav items */}
       <View style={styles.navContainer}>

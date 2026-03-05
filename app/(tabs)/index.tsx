@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, ScrollView, Pressable, Platform, KeyboardAvoidingView, Alert } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, ScrollView, Pressable, Platform, KeyboardAvoidingView, Alert, useWindowDimensions, type ViewStyle, type TextStyle } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { StatusBar } from 'expo-status-bar';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -17,7 +17,7 @@ import { createDefaultCard } from '../../services/srs';
 import { fetchLeaderboard, LeaderboardEntry } from '../../services/leaderboard';
 import { Fact, AtomicCard } from '../../types/fact';
 import { Container } from '../../components/Container';
-import { useTheme, typography, spacing, layout } from '../../theme';
+import { useTheme, typography, rawSizes, spacing, layout } from '../../theme';
 import { useAuth } from '../../contexts/AuthContext';
 import { authService } from '../../services/auth';
 import { useActionKey } from '../../hooks/useActionKey';
@@ -33,8 +33,10 @@ const CHIP_COUNT = 3;
 
 export default function SearchScreen() {
   const { theme, isDark } = useTheme();
+  const { width } = useWindowDimensions();
+  const isNarrowWeb = Platform.OS === 'web' && width < 768;
   const router = useRouter();
-  const { isLoggedIn, hasCompletedOnboarding, login, register, loginWithEmail, markOnboardingComplete, userId } = useAuth();
+  const { isLoggedIn, hasCompletedOnboarding, login, register, loginWithEmail, markOnboardingComplete, userId, needsName } = useAuth();
   const [loading, setLoading] = useState(false);
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
@@ -50,6 +52,15 @@ export default function SearchScreen() {
 
   // Controlled value for SearchInput (set when a chip is tapped)
   const [inputValue, setInputValue] = useState<string | undefined>(undefined);
+
+  // Web toast (replaces Alert.alert which is a no-op on React Native Web)
+  const [toastMessage, setToastMessage] = useState('');
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showToast = useCallback((msg: string) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToastMessage(msg);
+    toastTimer.current = setTimeout(() => setToastMessage(''), 3000);
+  }, []);
 
   // Top 3 leaderboard for podium strip
   const [topThree, setTopThree] = useState<LeaderboardEntry[]>([]);
@@ -84,19 +95,13 @@ export default function SearchScreen() {
     }, []),
   );
 
-  // Listen for auth state changes (e.g. user confirms email in browser, then returns)
+  // Show name modal when the user has a session but no display name yet
   useEffect(() => {
-    const unsubscribe = authService.subscribeToAuthChanges(async (event) => {
-      if (event === 'SIGNED_IN') {
-        const pending = await authService.isPendingEmailConfirmation();
-        if (pending) {
-          setEmailAuthModalVisible(false);
-          setNameModalVisible(true);
-        }
-      }
-    });
-    return unsubscribe;
-  }, []);
+    if (needsName) {
+      setEmailAuthModalVisible(false);
+      setNameModalVisible(true);
+    }
+  }, [needsName]);
 
   // Atomic cards draft state
   const [draftCards, setDraftCards] = useState<{ front: string; back: string }[]>([]);
@@ -112,15 +117,35 @@ export default function SearchScreen() {
     opacity: 1 - inputSlide.value,
   }));
 
+  // --- Web hero content fade (podium, header, subtitle, chips) ---
+  const contentFade = useSharedValue(1);
+  const contentFadeStyle = useAnimatedStyle(() => ({
+    opacity: contentFade.value,
+  }));
+
   /** Slide the input off-screen */
   const hideInput = useCallback(() => {
     inputSlide.value = withTiming(1, { duration: 300 });
-  }, [inputSlide]);
+    if (Platform.OS === 'web') {
+      contentFade.value = withTiming(0, { duration: 150 });
+    }
+  }, [inputSlide, contentFade]);
 
   /** Slide the input back on-screen */
   const showInput = useCallback(() => {
     inputSlide.value = withTiming(0, { duration: 300 });
-  }, [inputSlide]);
+    if (Platform.OS === 'web') {
+      contentFade.value = withTiming(1, { duration: 300 });
+    }
+  }, [inputSlide, contentFade]);
+
+  /** Instantly snap the input back on-screen (no animation) */
+  const snapInputVisible = useCallback(() => {
+    inputSlide.value = 0;
+    if (Platform.OS === 'web') {
+      contentFade.value = 1;
+    }
+  }, [inputSlide, contentFade]);
 
   const handleSearch = async (query: string) => {
     // Block searching until the user completes auth
@@ -133,10 +158,12 @@ export default function SearchScreen() {
     try {
       const limitResult = await checkAndIncrementSearch(userId ?? 'anonymous');
       if (!limitResult.allowed) {
-        Alert.alert(
-          'Daily limit reached',
-          `You've used all ${MAX_SEARCHES_PER_DAY} searches for today. Come back tomorrow!`,
-        );
+        const msg = `You've used all ${MAX_SEARCHES_PER_DAY} searches for today. Come back tomorrow!`;
+        if (Platform.OS === 'web') {
+          showToast(msg);
+        } else {
+          Alert.alert('Daily limit reached', msg);
+        }
         return;
       }
     } catch {
@@ -204,10 +231,12 @@ export default function SearchScreen() {
     // ── Fact storage limit ──
     const currentCount = await getFactCount();
     if (currentCount >= MAX_FACTS_STORED) {
-      Alert.alert(
-        'Library full',
-        `You've reached the maximum of ${MAX_FACTS_STORED} saved facts. Delete some from your library to make room!`,
-      );
+      const msg = `You've reached the maximum of ${MAX_FACTS_STORED} saved facts. Delete some from your library to make room!`;
+      if (Platform.OS === 'web') {
+        showToast(msg);
+      } else {
+        Alert.alert('Library full', msg);
+      }
       return;
     }
 
@@ -257,14 +286,10 @@ export default function SearchScreen() {
   };
 
   const handleEmailLogin = async (email: string, password: string) => {
-    const user = await loginWithEmail(email, password);
+    await loginWithEmail(email, password);
     setEmailAuthModalVisible(false);
     setAuthPending(false);
-    if (!user.name) {
-      setNameModalVisible(true);
-    } else {
-      handleReset();
-    }
+    handleReset();
   };
 
   const handleEmailDismiss = () => {
@@ -282,7 +307,7 @@ export default function SearchScreen() {
 
   const handleNameDismiss = () => {
     setNameModalVisible(false);
-    setAuthPending(true);
+    if (!userId) setAuthPending(true);
     handleReset();
   };
 
@@ -303,8 +328,8 @@ export default function SearchScreen() {
     setIsSaved(false);
     setDraftCards([]);
     setInputValue('');
-    showInput(); // slide the input back into view
-  }, [showInput]);
+    snapInputVisible();
+  }, [snapInputVisible]);
 
   // Space / Enter / ArrowRight triggers save when an answer is ready
   useActionKey(handleSave, !!answer && !isSaved && !isSaving && !sheetVisible && !loading);
@@ -327,114 +352,270 @@ export default function SearchScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {showEmptyState && (
+          {Platform.OS === 'web' ? (
             <>
-              {/* Mini podium — top 3 from leaderboard */}
-              {topThree.length > 0 && (
-                <Pressable
-                  onPress={() => router.push('/leaderboard')}
-                  style={styles.podiumStrip}
-                >
-                  {/* Gold — #1 (top row, biggest) */}
-                  {topThree[0] && (
-                    <View style={styles.podiumRow}>
-                      <Ionicons name="trophy" size={20} color="#FFD700" />
-                      <Text
-                        style={[styles.podiumNameGold, { color: theme.colors.text }]}
-                        numberOfLines={1}
+              {/* ── Web hero layout: podium → header → subtitle → input → chips ── */}
+              {showEmptyState && (
+                <>
+                  <Animated.View style={contentFadeStyle}>
+                    {topThree.length > 0 && (
+                      <Pressable
+                        onPress={() => router.push('/leaderboard')}
+                        style={styles.podiumStrip}
                       >
-                        {topThree[0].user_name}
-                      </Text>
-                    </View>
+                        {topThree[0] && (
+                          <View style={styles.podiumRow}>
+                            <Ionicons name="trophy" size={20} color="#FFD700" />
+                            <Text
+                              style={[styles.podiumNameGold, { color: theme.colors.text }]}
+                              numberOfLines={1}
+                            >
+                              {topThree[0].user_name}
+                            </Text>
+                          </View>
+                        )}
+                        {topThree[1] && (
+                          <View style={styles.podiumRow}>
+                            <Ionicons name="medal" size={14} color="#C0C0C0" />
+                            <Text
+                              style={[styles.podiumNameSilver, { color: theme.colors.textSecondary }]}
+                              numberOfLines={1}
+                            >
+                              {topThree[1].user_name}
+                            </Text>
+                          </View>
+                        )}
+                        {topThree[2] && (
+                          <View style={styles.podiumRow}>
+                            <Ionicons name="ribbon" size={12} color="#CD7F32" />
+                            <Text
+                              style={[styles.podiumNameBronze, { color: theme.colors.textSecondary }]}
+                              numberOfLines={1}
+                            >
+                              {topThree[2].user_name}
+                            </Text>
+                          </View>
+                        )}
+                      </Pressable>
+                    )}
+
+                    <Text style={[styles.header, { color: theme.colors.text }]}>What do you want to learn?</Text>
+
+                    <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+                      {currentJoke}
+                    </Text>
+                  </Animated.View>
+
+                  {!answer && (
+                    <Animated.View style={inputAnimatedStyle}>
+                      <SearchInput onSubmit={handleSearch} isLoading={loading} value={inputValue} />
+                    </Animated.View>
                   )}
 
-                  {/* Silver — #2 (smaller) */}
-                  {topThree[1] && (
-                    <View style={styles.podiumRow}>
-                      <Ionicons name="medal" size={14} color="#C0C0C0" />
-                      <Text
-                        style={[styles.podiumNameSilver, { color: theme.colors.textSecondary }]}
-                        numberOfLines={1}
-                      >
-                        {topThree[1].user_name}
-                      </Text>
+                  <Animated.View style={[contentFadeStyle, { width: '100%' }]}>
+                    <View style={styles.chipsContainer}>
+                      {isNarrowWeb ? (
+                        currentChips.map((prompt) => (
+                          <Pressable
+                            key={prompt}
+                            onPress={() => handleChipPress(prompt)}
+                            style={[
+                              styles.chip,
+                              { backgroundColor: isDark ? theme.colors.primary : theme.colors.surfaceHighlight },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.chipText,
+                                { color: isDark ? theme.colors.text : theme.colors.textSecondary },
+                              ]}
+                            >
+                              {prompt}
+                            </Text>
+                          </Pressable>
+                        ))
+                      ) : (
+                        <>
+                          <View style={styles.chipsRow}>
+                            {currentChips.slice(0, 2).map((prompt) => (
+                              <Pressable
+                                key={prompt}
+                                onPress={() => handleChipPress(prompt)}
+                                style={[
+                                  styles.chip,
+                                  { backgroundColor: isDark ? theme.colors.primary : theme.colors.surfaceHighlight },
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.chipText,
+                                    { color: isDark ? theme.colors.text : theme.colors.textSecondary },
+                                  ]}
+                                >
+                                  {prompt}
+                                </Text>
+                              </Pressable>
+                            ))}
+                          </View>
+                          <View style={styles.chipsRow}>
+                            {currentChips.slice(2).map((prompt) => (
+                              <Pressable
+                                key={prompt}
+                                onPress={() => handleChipPress(prompt)}
+                                style={[
+                                  styles.chip,
+                                  { backgroundColor: isDark ? theme.colors.primary : theme.colors.surfaceHighlight },
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.chipText,
+                                    { color: isDark ? theme.colors.text : theme.colors.textSecondary },
+                                  ]}
+                                >
+                                  {prompt}
+                                </Text>
+                              </Pressable>
+                            ))}
+                          </View>
+                        </>
+                      )}
                     </View>
-                  )}
-
-                  {/* Bronze — #3 (even smaller) */}
-                  {topThree[2] && (
-                    <View style={styles.podiumRow}>
-                      <Ionicons name="ribbon" size={12} color="#CD7F32" />
-                      <Text
-                        style={[styles.podiumNameBronze, { color: theme.colors.textSecondary }]}
-                        numberOfLines={1}
-                      >
-                        {topThree[2].user_name}
-                      </Text>
-                    </View>
-                  )}
-                </Pressable>
+                  </Animated.View>
+                </>
               )}
 
-              <Text style={[styles.header, { color: theme.colors.text }]}>What do you want to learn?</Text>
+              {loading && (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color={theme.colors.primary} />
+                  <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>Getting answer...</Text>
+                </View>
+              )}
 
-              {/* Eco-joke subtitle */}
-              <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-                {currentJoke}
-              </Text>
+              {!loading && answer && (
+                <AnswerCard
+                  answer={answer}
+                  onSave={handleSave}
+                  onSkip={handleReset}
+                  isSaving={isSaving}
+                  isSaved={isSaved}
+                />
+              )}
             </>
-          )}
-
-          {/* Example prompt chips — visible only in empty state */}
-          {showEmptyState && (
-            <View style={styles.chipsContainer}>
-              {currentChips.map((prompt) => (
-                <Pressable
-                  key={prompt}
-                  onPress={() => handleChipPress(prompt)}
-                  style={[
-                    styles.chip,
-                    { backgroundColor: isDark ? theme.colors.primary : theme.colors.surfaceHighlight },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      { color: isDark ? theme.colors.text : theme.colors.textSecondary },
-                    ]}
-                  >
-                    {prompt}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
-
-          {loading && (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={theme.colors.primary} />
-              <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>Getting answer...</Text>
-            </View>
-          )}
-
-          {!loading && answer && (
+          ) : (
             <>
-              <AnswerCard
-                answer={answer}
-                onSave={handleSave}
-                onSkip={handleReset}
-                isSaving={isSaving}
-                isSaved={isSaved}
-              />
+              {/* ── Mobile layout: original order (untouched) ── */}
+              {showEmptyState && (
+                <>
+                  {topThree.length > 0 ? (
+                    <Pressable
+                      onPress={() => router.push('/leaderboard')}
+                      style={styles.podiumStrip}
+                    >
+                      <View style={styles.podiumRow}>
+                        <Ionicons name="trophy" size={20} color="#FFD700" />
+                        <Text
+                          style={[styles.podiumNameGold, { color: theme.colors.text }]}
+                          numberOfLines={1}
+                        >
+                          {topThree[0]?.user_name ?? '\u00A0'}
+                        </Text>
+                      </View>
+                      <View style={[styles.podiumRow, !topThree[1] && { opacity: 0 }]}>
+                        <Ionicons name="medal" size={14} color="#C0C0C0" />
+                        <Text
+                          style={[styles.podiumNameSilver, { color: theme.colors.textSecondary }]}
+                          numberOfLines={1}
+                        >
+                          {topThree[1]?.user_name ?? '\u00A0'}
+                        </Text>
+                      </View>
+                      <View style={[styles.podiumRow, !topThree[2] && { opacity: 0 }]}>
+                        <Ionicons name="ribbon" size={12} color="#CD7F32" />
+                        <Text
+                          style={[styles.podiumNameBronze, { color: theme.colors.textSecondary }]}
+                          numberOfLines={1}
+                        >
+                          {topThree[2]?.user_name ?? '\u00A0'}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  ) : (
+                    <View style={[styles.podiumStrip, { opacity: 0 }]}>
+                      <View style={styles.podiumRow}>
+                        <Ionicons name="trophy" size={20} color="#FFD700" />
+                        <Text style={styles.podiumNameGold} numberOfLines={1}>{'\u00A0'}</Text>
+                      </View>
+                      <View style={styles.podiumRow}>
+                        <Ionicons name="medal" size={14} color="#C0C0C0" />
+                        <Text style={styles.podiumNameSilver} numberOfLines={1}>{'\u00A0'}</Text>
+                      </View>
+                      <View style={styles.podiumRow}>
+                        <Ionicons name="ribbon" size={12} color="#CD7F32" />
+                        <Text style={styles.podiumNameBronze} numberOfLines={1}>{'\u00A0'}</Text>
+                      </View>
+                    </View>
+                  )}
+
+                  <Text style={[styles.header, { color: theme.colors.text }]}>What do you want to learn?</Text>
+
+                  <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+                    {currentJoke}
+                  </Text>
+                </>
+              )}
+
+              {showEmptyState && (
+                <View style={styles.chipsContainer}>
+                  {currentChips.map((prompt) => (
+                    <Pressable
+                      key={prompt}
+                      onPress={() => handleChipPress(prompt)}
+                      style={[
+                        styles.chip,
+                        styles.chipMobileStack,
+                        { backgroundColor: isDark ? theme.colors.primary : theme.colors.surfaceHighlight },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.chipText,
+                          styles.chipTextMobileStack,
+                          { color: isDark ? theme.colors.text : theme.colors.textSecondary },
+                        ]}
+                      >
+                        {prompt}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+
+              {loading && (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color={theme.colors.primary} />
+                  <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>Getting answer...</Text>
+                </View>
+              )}
+
+              {!loading && answer && (
+                <AnswerCard
+                  answer={answer}
+                  onSave={handleSave}
+                  onSkip={handleReset}
+                  isSaving={isSaving}
+                  isSaved={isSaved}
+                />
+              )}
             </>
           )}
         </ScrollView>
 
-        {/* Bottom-pinned search input with slide animation.
+        {/* Bottom-pinned search input — mobile only.
             Unmounted while an answer is displayed so it doesn't occupy
-            layout space (the white box bug). The shared inputSlide value
-            survives the unmount, so showInput() still animates correctly. */}
-        {!answer && (
+            layout space. The shared inputSlide value survives the unmount,
+            so showInput() still animates correctly. */}
+        {Platform.OS !== 'web' && !answer && (
           <Animated.View
             style={[
               styles.bottomInputContainer,
@@ -473,6 +654,17 @@ export default function SearchScreen() {
         visible={jokeModalVisible}
         onConfirm={handleJokeConfirm}
       />
+
+      {/* Web toast overlay */}
+      {toastMessage !== '' && (
+        <View style={toastStyles.container}>
+          <View style={[toastStyles.bubble, { backgroundColor: theme.colors.text }]}>
+            <Text style={[toastStyles.text, { color: theme.colors.background }]}>
+              {toastMessage}
+            </Text>
+          </View>
+        </View>
+      )}
     </Container>
   );
 }
@@ -483,9 +675,17 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.lg, // breathing room above bottom input
   },
   scrollContentCentered: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    paddingTop: 0, // let flexbox handle vertical position
+    flex: 1,
+    ...Platform.select({
+      web: {
+        justifyContent: 'flex-start' as const,
+        paddingTop: spacing.xxl,
+      },
+      default: {
+        justifyContent: 'center' as const,
+        paddingTop: 0,
+      },
+    }),
   },
   podiumStrip: {
     alignItems: 'center',
@@ -499,42 +699,52 @@ const styles = StyleSheet.create({
   },
   podiumNameGold: {
     fontFamily: typography.fontFamily.bold,
-    fontSize: typography.sizes.md,
+    fontSize: rawSizes.md,
   },
   podiumNameSilver: {
     fontFamily: typography.fontFamily.regular,
-    fontSize: typography.sizes.sm,
+    fontSize: rawSizes.sm,
   },
   podiumNameBronze: {
     fontFamily: typography.fontFamily.regular,
-    fontSize: typography.sizes.xs,
+    fontSize: rawSizes.xs,
   },
   header: {
     fontFamily: typography.fontFamily.bold,
-    fontSize: typography.sizes.xxl,
+    fontSize: rawSizes.xxl,
     marginBottom: spacing.sm,
     textAlign: 'center',
   },
   subtitle: {
     fontFamily: typography.fontFamily.regular,
-    fontSize: typography.sizes.sm,
+    fontSize: rawSizes.sm,
     textAlign: 'center',
     marginBottom: spacing.xl,
   },
   chipsContainer: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  chipsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'center',
     gap: spacing.sm,
   },
   chip: {
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: Platform.select({ web: 12, default: 20 }),
     paddingVertical: spacing.sm,
     borderRadius: layout.borderRadius.round,
   },
   chipText: {
     fontFamily: typography.fontFamily.regular,
-    fontSize: typography.sizes.sm,
+    fontSize: Platform.select({ web: rawSizes.xs, default: rawSizes.sm }),
+  },
+  chipMobileStack: {
+    paddingHorizontal: 12,
+  },
+  chipTextMobileStack: {
+    fontSize: rawSizes.xs,
   },
   loadingContainer: {
     alignItems: 'center',
@@ -552,4 +762,26 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     paddingBottom: 0,
   },
+});
+
+const toastStyles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    bottom: 32,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    pointerEvents: 'none',
+  } as ViewStyle,
+  bubble: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+    maxWidth: '90%',
+  } as ViewStyle,
+  text: {
+    fontFamily: typography.fontFamily.regular,
+    fontSize: rawSizes.sm,
+    textAlign: 'center',
+  } as TextStyle,
 });

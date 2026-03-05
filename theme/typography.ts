@@ -1,3 +1,19 @@
+import { Platform } from 'react-native';
+
+export function scaleForWeb(n: number): number {
+  return Platform.OS === 'web' ? Math.round(n * 1.2) : n;
+}
+
+export const rawSizes = {
+  xs: 14,
+  sm: 16,
+  md: 18,
+  lg: 22,
+  xl: 26,
+  xxl: 34,
+  xxxl: 42,
+} as const;
+
 export const typography = {
   fontFamily: {
     regular: 'Nunito-Regular',
@@ -5,13 +21,13 @@ export const typography = {
     extraBold: 'Nunito-ExtraBold',
   },
   sizes: {
-    xs: 12,
-    sm: 14,
-    md: 16,
-    lg: 20,
-    xl: 24,
-    xxl: 32,
-    xxxl: 40,
+    xs: scaleForWeb(12),
+    sm: scaleForWeb(14),
+    md: scaleForWeb(16),
+    lg: scaleForWeb(20),
+    xl: scaleForWeb(24),
+    xxl: scaleForWeb(32),
+    xxxl: scaleForWeb(40),
   },
   weights: {
     regular: '400',

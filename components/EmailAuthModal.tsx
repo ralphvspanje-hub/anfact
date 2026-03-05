@@ -12,7 +12,7 @@ import {
   Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme, typography, spacing, layout } from '../theme';
+import { useTheme, typography, spacing, layout, scaleForWeb } from '../theme';
 
 type Mode = 'register' | 'login' | 'pending_confirmation' | 'forgot_password' | 'reset_sent';
 
@@ -450,6 +450,6 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.xs,
     textAlign: 'center',
     marginTop: spacing.sm,
-    lineHeight: 16,
+    lineHeight: scaleForWeb(16),
   },
 });

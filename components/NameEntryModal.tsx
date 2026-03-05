@@ -14,7 +14,7 @@ import { useTheme, typography, spacing, layout } from '../theme';
 interface NameEntryModalProps {
   visible: boolean;
   onSubmit: (name: string) => void;
-  onDismiss: () => void;
+  onDismiss?: () => void;
 }
 
 export default function NameEntryModal({ visible, onSubmit, onDismiss }: NameEntryModalProps) {
@@ -30,6 +30,7 @@ export default function NameEntryModal({ visible, onSubmit, onDismiss }: NameEnt
   };
 
   const handleDismiss = () => {
+    if (!onDismiss) return;
     setName('');
     onDismiss();
   };
@@ -41,8 +42,8 @@ export default function NameEntryModal({ visible, onSubmit, onDismiss }: NameEnt
       animationType="fade"
       onRequestClose={handleDismiss}
     >
-      {/* Backdrop — tapping dismisses */}
-      <Pressable style={styles.backdrop} onPress={handleDismiss}>
+      {/* Backdrop — tapping dismisses only when onDismiss is provided */}
+      <Pressable style={styles.backdrop} onPress={onDismiss ? handleDismiss : undefined}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.centerer}

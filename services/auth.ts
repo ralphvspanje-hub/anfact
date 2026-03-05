@@ -131,6 +131,24 @@ export const authService: AuthService = {
 
     await AsyncStorage.setItem(USER_NAME_KEY, name);
 
+    const supabase = getSupabase();
+    if (supabase) {
+      const { error } = await supabase.from('leaderboard').upsert(
+        {
+          user_id: id,
+          user_name: name,
+          streak: 0,
+          retention: 0,
+          total_reviews: 0,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id' },
+      );
+      if (error && error.code !== '23505') {
+        console.error('Failed to upsert leaderboard on login:', error.message);
+      }
+    }
+
     return { id, name };
   },
 

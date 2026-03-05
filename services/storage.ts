@@ -10,7 +10,7 @@ const DAILY_SEARCHES_KEY = 'daily_searches';
 // ──────────────────────────────────────────────
 // Usage limits
 // ──────────────────────────────────────────────
-export const MAX_SEARCHES_PER_DAY = 30;
+export const MAX_SEARCHES_PER_DAY = 100;
 export const MAX_FACTS_STORED = 100;
 
 // ──────────────────────────────────────────────

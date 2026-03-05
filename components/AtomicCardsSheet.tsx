@@ -9,7 +9,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme, typography, spacing, layout } from '../theme';
+import { useTheme, typography, spacing, layout, scaleForWeb } from '../theme';
 import { AnimatedPressable } from './AnimatedPressable';
 import { useActionKey } from '../hooks/useActionKey';
 
@@ -161,6 +161,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sheet: {
+    width: '100%',
+    maxWidth: layout.maxWidth,
+    alignSelf: 'center',
     maxHeight: SCREEN_HEIGHT * 0.75,
     borderTopLeftRadius: layout.borderRadius.lg,
     borderTopRightRadius: layout.borderRadius.lg,
@@ -212,7 +215,7 @@ const styles = StyleSheet.create({
   cardBack: {
     fontFamily: typography.fontFamily.regular,
     fontSize: typography.sizes.sm,
-    lineHeight: 20,
+    lineHeight: scaleForWeb(20),
   },
   trashButton: {
     padding: spacing.xs,

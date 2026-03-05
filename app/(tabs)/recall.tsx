@@ -43,7 +43,7 @@ import { generateMnemonic, generateAtomicCards } from '../../services/llm';
 import AtomicCardsSheet from '../../components/AtomicCardsSheet';
 import MarkdownText from '../../components/MarkdownText';
 import { Container } from '../../components/Container';
-import { useTheme, typography, spacing, layout } from '../../theme';
+import { useTheme, typography, spacing, layout, scaleForWeb } from '../../theme';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
 import { EmptyState } from '../../components/EmptyState';
 import { FlipCard } from '../../components/FlipCard';
@@ -1438,7 +1438,7 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.regular,
     fontSize: typography.sizes.sm,
     fontStyle: 'italic',
-    lineHeight: 20,
+    lineHeight: scaleForWeb(20),
     marginTop: spacing.md,
   },
   mnemonicButton: {
@@ -1511,7 +1511,7 @@ const styles = StyleSheet.create({
   },
   ratingButtonText: {
     fontFamily: typography.fontFamily.bold,
-    fontSize: typography.sizes.md,
+    fontSize: Platform.OS === 'web' ? typography.sizes.lg : typography.sizes.md,
   },
   // Delete button
   deleteButton: {

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { Platform } from 'react-native';
 import { authService, AuthUser, RegisterResult } from '../services/auth';
 import { syncFactsOnLogin } from '../services/storage';
 
@@ -23,6 +24,8 @@ interface AuthContextType {
   deleteAccount: () => Promise<void>;
   /** Flag that the full popup sequence has been completed */
   markOnboardingComplete: () => Promise<void>;
+  /** True when the user has a session but no display name yet */
+  needsName: boolean;
   /** True while the initial load from Supabase / AsyncStorage is still running */
   loading: boolean;
 }
@@ -43,6 +46,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  const needsName = userId !== null && userName === null;
 
   const hydrateAuthState = useCallback(async () => {
     try {
@@ -74,7 +79,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const unsubscribe = authService.subscribeToAuthChanges((event) => {
       if (event === 'SIGNED_IN') {
-        hydrateAuthState();
+        // On web, after an email confirmation redirect (?code=...), the session
+        // is established asynchronously. A clean reload is the most reliable way
+        // to start fresh with the session already in place.
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location.search.includes('code=')) {
+          window.location.replace(window.location.pathname);
+        } else {
+          hydrateAuthState();
+        }
       }
     });
     return unsubscribe;
@@ -134,6 +146,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         userName,
         isLoggedIn,
         hasCompletedOnboarding,
+        needsName,
         register,
         loginWithEmail,
         login,
