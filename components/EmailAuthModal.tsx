@@ -136,6 +136,16 @@ export default function EmailAuthModal({
                     {mode === 'reset_sent' ? 'Back to log in' : 'Got it'}
                   </Text>
                 </Pressable>
+                {mode === 'pending_confirmation' && (
+                  <Pressable
+                    onPress={() => { setMode('login'); setError(''); }}
+                    style={styles.toggleLink}
+                  >
+                    <Text style={[styles.toggleText, { color: theme.colors.primary }]}>
+                      Already have an account? Try logging in instead, nerd
+                    </Text>
+                  </Pressable>
+                )}
               </>
             ) : mode === 'forgot_password' ? (
               <>
