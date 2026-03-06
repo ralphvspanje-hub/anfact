@@ -625,7 +625,7 @@ export default function SearchScreen() {
             style={[
               styles.bottomInputContainer,
               { backgroundColor: theme.colors.background },
-              isNarrowWeb && { position: 'fixed' as any, bottom: 0, left: 0, right: 0 },
+              isNarrowWeb && { position: 'fixed' as any, bottom: 0, left: 16, right: 16 },
               inputAnimatedStyle,
             ]}
           >

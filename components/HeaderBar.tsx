@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
   },
   rightSectionNarrow: {
     position: 'absolute',
-    right: 16,
+    right: 4,
     top: 0,
     bottom: 0,
     justifyContent: 'center',
