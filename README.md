@@ -27,6 +27,10 @@ You search once. You remember forever.
   <video src="https://github.com/user-attachments/assets/18531e5a-6a36-4d95-9469-4cc15768c1ad" width="300" autoplay loop muted />
 </p>
 
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/17083c69-2d2a-4e08-8413-e916614170c3" width="800" />
+</p>
+
 **[→ Try it live at anfact.app](https://www.anfact.app)**
 
 ## Key Features
