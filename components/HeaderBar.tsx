@@ -45,7 +45,7 @@ export const HeaderBar = () => {
       )}
 
       {/* Center: Nav items */}
-      <View style={styles.navContainer}>
+      <View style={[styles.navContainer, isNarrow && styles.navContainerNarrow]}>
         {NAV_ITEMS.map((item) => {
           const active = isActive(item.route);
           return (
@@ -54,6 +54,7 @@ export const HeaderBar = () => {
               onPress={() => router.push(item.route as any)}
               style={({ pressed }) => [
                 styles.navItem,
+                isNarrow && styles.navItemNarrow,
                 active && [styles.navItemActive, { borderBottomColor: theme.colors.primary }],
                 { opacity: pressed ? 0.7 : 1 },
               ]}
@@ -80,7 +81,7 @@ export const HeaderBar = () => {
       </View>
 
       {/* Right: Settings menu */}
-      <View style={styles.rightSection}>
+      <View style={[styles.rightSection, isNarrow && styles.rightSectionNarrow]}>
         <SettingsMenu />
       </View>
     </View>
@@ -129,6 +130,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
+  navContainerNarrow: {
+    flex: 1,
+    justifyContent: 'center',
+  },
   navItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -147,8 +152,18 @@ const styles = StyleSheet.create({
       web: { userSelect: 'none' as any },
     }),
   },
+  navItemNarrow: {
+    minHeight: 44,
+  },
   rightSection: {
-    minWidth: 100,
     alignItems: 'flex-end',
+  },
+  rightSectionNarrow: {
+    position: 'absolute',
+    right: 16,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

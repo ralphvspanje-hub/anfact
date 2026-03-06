@@ -348,6 +348,7 @@ export default function SearchScreen() {
           contentContainerStyle={[
             styles.scrollContent,
             showEmptyState && styles.scrollContentCentered,
+            showEmptyState && isNarrowWeb && { justifyContent: 'center' as const, paddingTop: 0 },
           ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -406,83 +407,87 @@ export default function SearchScreen() {
                     </Text>
                   </Animated.View>
 
-                  {!answer && (
+                  {!answer && !isNarrowWeb && (
                     <Animated.View style={inputAnimatedStyle}>
                       <SearchInput onSubmit={handleSearch} isLoading={loading} value={inputValue} />
                     </Animated.View>
                   )}
 
-                  <Animated.View style={[contentFadeStyle, { width: '100%' }]}>
-                    <View style={styles.chipsContainer}>
-                      {isNarrowWeb ? (
-                        currentChips.map((prompt) => (
-                          <Pressable
-                            key={prompt}
-                            onPress={() => handleChipPress(prompt)}
-                            style={[
-                              styles.chip,
-                              { backgroundColor: isDark ? theme.colors.primary : theme.colors.surfaceHighlight },
-                            ]}
-                          >
-                            <Text
+                  {!isNarrowWeb && (
+                    <Animated.View style={[contentFadeStyle, { width: '100%' }]}>
+                      <View style={styles.chipsContainer}>
+                        <View style={styles.chipsRow}>
+                          {currentChips.slice(0, 2).map((prompt) => (
+                            <Pressable
+                              key={prompt}
+                              onPress={() => handleChipPress(prompt)}
                               style={[
-                                styles.chipText,
-                                { color: isDark ? theme.colors.text : theme.colors.textSecondary },
+                                styles.chip,
+                                { backgroundColor: isDark ? theme.colors.primary : theme.colors.surfaceHighlight },
                               ]}
                             >
-                              {prompt}
-                            </Text>
-                          </Pressable>
-                        ))
-                      ) : (
-                        <>
-                          <View style={styles.chipsRow}>
-                            {currentChips.slice(0, 2).map((prompt) => (
-                              <Pressable
-                                key={prompt}
-                                onPress={() => handleChipPress(prompt)}
+                              <Text
                                 style={[
-                                  styles.chip,
-                                  { backgroundColor: isDark ? theme.colors.primary : theme.colors.surfaceHighlight },
+                                  styles.chipText,
+                                  { color: isDark ? theme.colors.text : theme.colors.textSecondary },
                                 ]}
                               >
-                                <Text
-                                  style={[
-                                    styles.chipText,
-                                    { color: isDark ? theme.colors.text : theme.colors.textSecondary },
-                                  ]}
-                                >
-                                  {prompt}
-                                </Text>
-                              </Pressable>
-                            ))}
-                          </View>
-                          <View style={styles.chipsRow}>
-                            {currentChips.slice(2).map((prompt) => (
-                              <Pressable
-                                key={prompt}
-                                onPress={() => handleChipPress(prompt)}
+                                {prompt}
+                              </Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                        <View style={styles.chipsRow}>
+                          {currentChips.slice(2).map((prompt) => (
+                            <Pressable
+                              key={prompt}
+                              onPress={() => handleChipPress(prompt)}
+                              style={[
+                                styles.chip,
+                                { backgroundColor: isDark ? theme.colors.primary : theme.colors.surfaceHighlight },
+                              ]}
+                            >
+                              <Text
                                 style={[
-                                  styles.chip,
-                                  { backgroundColor: isDark ? theme.colors.primary : theme.colors.surfaceHighlight },
+                                  styles.chipText,
+                                  { color: isDark ? theme.colors.text : theme.colors.textSecondary },
                                 ]}
                               >
-                                <Text
-                                  style={[
-                                    styles.chipText,
-                                    { color: isDark ? theme.colors.text : theme.colors.textSecondary },
-                                  ]}
-                                >
-                                  {prompt}
-                                </Text>
-                              </Pressable>
-                            ))}
-                          </View>
-                        </>
-                      )}
-                    </View>
-                  </Animated.View>
+                                {prompt}
+                              </Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      </View>
+                    </Animated.View>
+                  )}
                 </>
+              )}
+
+              {showEmptyState && isNarrowWeb && (
+                <View style={styles.chipsContainer}>
+                  {currentChips.map((prompt) => (
+                    <Pressable
+                      key={prompt}
+                      onPress={() => handleChipPress(prompt)}
+                      style={[
+                        styles.chip,
+                        styles.chipMobileStack,
+                        { backgroundColor: isDark ? theme.colors.primary : theme.colors.surfaceHighlight },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.chipText,
+                          styles.chipTextMobileStack,
+                          { color: isDark ? theme.colors.text : theme.colors.textSecondary },
+                        ]}
+                      >
+                        {prompt}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
               )}
 
               {loading && (
@@ -615,11 +620,12 @@ export default function SearchScreen() {
             Unmounted while an answer is displayed so it doesn't occupy
             layout space. The shared inputSlide value survives the unmount,
             so showInput() still animates correctly. */}
-        {Platform.OS !== 'web' && !answer && (
+        {(Platform.OS !== 'web' || isNarrowWeb) && !answer && (
           <Animated.View
             style={[
               styles.bottomInputContainer,
               { backgroundColor: theme.colors.background },
+              isNarrowWeb && { position: 'fixed' as any, bottom: 0, left: 0, right: 0 },
               inputAnimatedStyle,
             ]}
           >
