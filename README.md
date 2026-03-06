@@ -24,7 +24,7 @@ You search once. You remember forever.
 ## Demo
 
 <p align="center">
-  <video src="https://github.com/user-attachments/assets/fbe3e3af-7b5f-4ca9-abd5-8593284ea086" width="300" autoplay loop muted />
+  <video src="https://github.com/user-attachments/assets/18531e5a-6a36-4d95-9469-4cc15768c1ad" width="300" autoplay loop muted />
 </p>
 
 **[→ Try it live at anfact.app](https://www.anfact.app)**
