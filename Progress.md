@@ -7,7 +7,8 @@ I am currently working on getting it live in the air
 
 Made a more sophistacated register system. So I launched it on web and secured a nice domain name anfact.app!!!
 
-Working on:
+**Future features:**
+
   1. I don't like the mnemonics that is generated, I am thinking of removing them, or...:
   2. Having an option to write your own mnemonics can be cool, and usefull instead of these AI generated ones.
   3. Having an option to make your own flashcards based on a fact. This is a nobrainer because it would be nice for the user to do that.
