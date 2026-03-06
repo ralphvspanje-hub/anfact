@@ -52,9 +52,12 @@ export const FlipCard: React.FC<FlipCardProps> = ({
   // and prevent inner ScrollViews from scrolling).
   const touchStartYRef = useRef(0);
   const mouseStartYRef = useRef(0);
+  const recentTouchRef = useRef(false);
 
   const handleTouchStart = (e: GestureResponderEvent) => {
     touchStartYRef.current = e.nativeEvent.pageY;
+    recentTouchRef.current = true;
+    setTimeout(() => { recentTouchRef.current = false; }, 500);
   };
 
   const handleTouchEnd = (e: GestureResponderEvent) => {
@@ -64,6 +67,7 @@ export const FlipCard: React.FC<FlipCardProps> = ({
   };
 
   const handleMouseDown = (e: { clientY: number }) => {
+    if (recentTouchRef.current) return;
     mouseStartYRef.current = e.clientY;
     let didMove = false;
 
