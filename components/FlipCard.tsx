@@ -52,39 +52,31 @@ export const FlipCard: React.FC<FlipCardProps> = ({
   // and prevent inner ScrollViews from scrolling).
   const touchStartYRef = useRef(0);
   const mouseStartYRef = useRef(0);
-  const didMoveRef = useRef(false);
 
   const handleTouchStart = (e: GestureResponderEvent) => {
     touchStartYRef.current = e.nativeEvent.pageY;
-    didMoveRef.current = false;
   };
 
-  const handleTouchMove = (e: GestureResponderEvent) => {
-    if (Math.abs(e.nativeEvent.pageY - touchStartYRef.current) > 8) {
-      didMoveRef.current = true;
-    }
-  };
-
-  const handleTouchEnd = () => {
-    if (!didMoveRef.current) {
+  const handleTouchEnd = (e: GestureResponderEvent) => {
+    if (Math.abs(e.nativeEvent.pageY - touchStartYRef.current) <= 8) {
       onFlip();
     }
   };
 
   const handleMouseDown = (e: { clientY: number }) => {
     mouseStartYRef.current = e.clientY;
-    didMoveRef.current = false;
+    let didMove = false;
 
     const onMouseMove = (me: MouseEvent) => {
       if (Math.abs(me.clientY - mouseStartYRef.current) > 8) {
-        didMoveRef.current = true;
+        didMove = true;
       }
     };
 
     const onMouseUp = () => {
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
-      if (!didMoveRef.current) {
+      if (!didMove) {
         onFlip();
       }
     };
@@ -142,7 +134,6 @@ export const FlipCard: React.FC<FlipCardProps> = ({
     <View
       style={[styles.container, flexHeight && styles.containerFlex, style]}
       onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       {...(webMouseProps as any)}
     >
