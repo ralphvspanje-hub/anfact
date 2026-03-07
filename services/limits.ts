@@ -34,7 +34,6 @@ export async function checkAndIncrementSearch(
     try {
       const { data, error } = await supabase.rpc('check_and_increment_search', {
         p_user_id: userId,
-        p_max_searches: MAX_SEARCHES_PER_DAY,
       });
 
       if (!error && data) {
