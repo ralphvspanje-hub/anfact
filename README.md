@@ -119,6 +119,29 @@ User Question
 
 ---
 
+## AI-Native Codebase
+
+This codebase is designed to be navigated by AI coding agents with zero warm-up time.
+
+Every major directory contains a `CLAUDE.md` file that gives an agent immediate, accurate context about what lives there, what the conventions are, and what to avoid — without having to read every file first.
+
+```
+anfact/
+├── CLAUDE.md              ← start here
+├── services/CLAUDE.md
+├── components/CLAUDE.md
+├── contexts/CLAUDE.md
+├── hooks/CLAUDE.md
+├── app/CLAUDE.md
+├── types/CLAUDE.md
+├── theme/CLAUDE.md
+└── constants/CLAUDE.md
+```
+
+**Self-improving loop.** Agents are instructed to log any confusion, outdated description, or missing gotcha to `AGENT_LOG.md`, and to immediately update the relevant `CLAUDE.md` if they resolved it. The context system gets more accurate with every coding session.
+
+---
+
 <p align="center">
   Solo project by <a href="https://www.linkedin.com/in/ralphvanspanje"><strong>Ralph van Spanje</strong></a>
 </p>
