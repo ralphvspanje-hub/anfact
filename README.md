@@ -121,7 +121,9 @@ User Question
 
 ## AI-Native Codebase
 
-This codebase is designed to be navigated by AI coding agents with zero warm-up time.
+This project was built with AI as a process, not a shortcut. Before committing to any feature, the idea goes through a Claude project set up as a virtual CTO — it pokes holes and pushes back until the idea actually holds up. Once it clears that, every feature follows the same path: create an issue in Linear, explore the codebase, generate a plan, then execute in Cursor. The CLAUDE.md files exist to give agents enough context to hit it in one pass.
+
+The codebase itself is designed to be navigated by AI coding agents with zero warm-up time.
 
 Every major directory contains a `CLAUDE.md` file that gives an agent immediate, accurate context about what lives there, what the conventions are, and what to avoid — without having to read every file first.
 
